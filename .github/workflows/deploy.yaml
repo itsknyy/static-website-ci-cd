@@ -1,0 +1,40 @@
+name: Update index.html in my server.
+
+on: 
+  push:
+    branches:
+      - main
+
+jobs:
+  deploymycode:
+    name: "Deploy my code in my server"
+    runs-on: ubuntu-latest
+    env:
+      SERVER_IP: ${{ vars.SERVER_IP }}
+
+    steps: 
+      - uses: actions/checkout@v4    
+        # with: 
+        # fetch-depth: 0
+      
+      - name: "Configure SSH"
+        run: |     #pipe is used for multi-line command
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config  # doesn't ask for yes or no during ssh (usually first time)
+          cat ~/.ssh/config   #to verify
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      
+      - name: "SSH Key Access" #ci
+        run: |
+          touch mykey.pem
+          echo "$SSH_KEY64" | base64 -d > mykey.pem && chmod 400 mykey.pem
+          ssh-keygen -R $SERVER_IP
+        
+        env:
+          SSH_KEY64: ${{ secrets.SSH_KEY64 }}
+
+      - name: "Depoly the code to my server"
+        run: |      # -t means pseudo terminal
+          ssh -t ec2-user@$SERVER_IP -i mykey.pem 'cd /usr/share/nginx/html && git pull origin main'
