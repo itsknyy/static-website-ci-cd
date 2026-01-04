@@ -1,4 +1,4 @@
-name: Build & Deploy NGINX Docker App to EC2
+name: Build & Deploy Docker App to EC2
 
 on:
   push:
