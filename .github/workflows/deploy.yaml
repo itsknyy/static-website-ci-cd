@@ -1,4 +1,4 @@
-name: Deploy to EC2 using Docker
+name: Build & Deploy NGINX Docker App to EC2
 
 on:
   push:
@@ -12,43 +12,47 @@ jobs:
       SERVER_IP: ${{ vars.SERVER_IP }}
 
     steps:
-    # 1. Checkout source code
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      # 1. Checkout repo
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # 2. Build Docker image with no cache
-    - name: Build Docker Image (No Cache)
-      run: |
-        docker build --no-cache -t mynginxapp .
-        docker save mynginxapp -o mynginxapp.tar
+      # 2. Build Docker Image
+      - name: Build Docker Image
+        run: |
+          docker build --no-cache -t mynginxapp .
 
-    # 3. Configure SSH so GitHub Action can SSH into EC2
-    - name: Configure SSH (Disable Host Checking)
-      run: |
-        mkdir -p ~/.ssh
-        echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-        chmod 600 ~/.ssh/config
+      # 3. Save Docker Image
+      - name: Save Docker Image
+        run: |
+          docker save mynginxapp:latest -o mynginxapp.tar
 
-    # 4. Load SSH private key from GitHub Secrets
-    - name: Load Private Key
-      run: |
-        echo "$SSH_KEY64" | base64 -d > mykey.pem
-        chmod 400 mykey.pem
-      env:
-        SSH_KEY64: ${{ secrets.SSH_KEY64 }}
+      # 4. Prepare SSH & disable host key checking
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
-    # 5. Upload docker image to EC2 using scp
-    # 6. Upload Docker Image (scp)
-    - name: Upload Docker Image to EC2
-      run: |
-        scp -i mykey.pem mynginxapp.tar ec2-user@$SERVER_IP:/home/ec2-user/
+      # 5. Add private key from GitHub Secrets
+      - name: Add SSH Key
+        env:
+          SSH_KEY64: ${{ secrets.SSH_KEY64 }}
+        run: |
+          echo "$SSH_KEY64" | base64 -d > mykey.pem
+          chmod 400 mykey.pem
 
-    # 7. SSH into EC2 and deploy the image
-    - name: Deploy on EC2
-      run: |
-        ssh -i mykey.pem ec2-user@$SERVER_IP "
-          docker load -i /home/ec2-user/mynginxapp.tar
-          docker stop myapp || true
-          docker rm myapp || true
-          docker run -d -p 80:80 --name myapp mynginxapp
-        "
+      # 6. Upload Docker Image (scp)
+      - name: Upload Docker Image to EC2
+        run: |
+          scp -i mykey.pem mynginxapp.tar ec2-user@$SERVER_IP:/home/ec2-user/
+
+      # 7. Load & run container on EC2
+      - name: Deploy on EC2
+        run: |
+          ssh -i mykey.pem ec2-user@$SERVER_IP "
+            docker load -i mynginxapp.tar &&
+            docker stop mynginxapp || true &&
+            docker rm mynginxapp || true &&
+            docker run -d -p 80:80 --name mynginxapp mynginxapp:latest
+          "
