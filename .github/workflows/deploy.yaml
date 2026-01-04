@@ -1,4 +1,4 @@
-name: Build & Deploy Docker App to EC2
+name: Build & Deploy NGINX Docker App to EC2
 
 on:
   push:
@@ -12,17 +12,29 @@ jobs:
       SERVER_IP: ${{ vars.SERVER_IP }}
 
     steps:
+      # 1. Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. Build Docker Image
       - name: Build Docker Image
         run: |
           docker build -t mynginxapp:latest .
 
+      # 3. Save Docker Image
       - name: Save Docker Image
         run: |
           docker save mynginxapp:latest -o mynginxapp.tar
 
+      # 4. Prepare SSH & disable host key checking
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      # 5. Add private key from GitHub Secrets
       - name: Add SSH Key
         env:
           SSH_KEY64: ${{ secrets.SSH_KEY64 }}
@@ -30,10 +42,12 @@ jobs:
           echo "$SSH_KEY64" | base64 -d > mykey.pem
           chmod 400 mykey.pem
 
+      # 6. Upload Docker Image (scp)
       - name: Upload Docker Image to EC2
         run: |
           scp -i mykey.pem mynginxapp.tar ec2-user@$SERVER_IP:/home/ec2-user/
 
+      # 7. Load & run container on EC2
       - name: Deploy on EC2
         run: |
           ssh -i mykey.pem ec2-user@$SERVER_IP "
