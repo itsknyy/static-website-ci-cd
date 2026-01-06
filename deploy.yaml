@@ -1,4 +1,4 @@
-name: Build & Deploy NGINX Docker App to EC2
+name: CI/CD TO EC2 (DOCKERHUB)
 
 on:
   push:
@@ -8,23 +8,33 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     env:
       SERVER_IP: ${{ vars.SERVER_IP }}
+      DOCKER_REPO: ${{vars.DOCKER_REPO}}
 
     steps:
       # 1. Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. Login to dockerhub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # 2. Build Docker Image
       - name: Build Docker Image
         run: |
-          docker build --no-cache -t mynginxapp .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest .
 
-      # 3. Save Docker Image
-      - name: Save Docker Image
+
+      # 4. Push image to Docker Hub
+      - name: Push Docker image
         run: |
-          docker save mynginxapp:latest -o mynginxapp.tar
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest
 
       # 4. Prepare SSH & disable host key checking
       - name: Configure SSH
@@ -42,17 +52,10 @@ jobs:
           echo "$SSH_KEY64" | base64 -d > mykey.pem
           chmod 400 mykey.pem
 
-      # 6. Upload Docker Image (scp)
-      - name: Upload Docker Image to EC2
-        run: |
-          scp -i mykey.pem mynginxapp.tar ec2-user@$SERVER_IP:/home/ec2-user/
-
       # 7. Load & run container on EC2
       - name: Deploy on EC2
         run: |
           ssh -i mykey.pem ec2-user@$SERVER_IP "
-            docker load -i mynginxapp.tar &&
-            docker stop mynginxapp || true &&
-            docker rm mynginxapp || true &&
-            docker run -d -p 80:80 --name mynginxapp mynginxapp:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest &&
+            docker run -d -p 80:80 --name $DOCKER_REPO ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest
           "
