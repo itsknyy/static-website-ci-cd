@@ -53,9 +53,10 @@ jobs:
           chmod 400 mykey.pem
 
       # 7. Load & run container on EC2
-      - name: Deploy on EC2
+      - name: Deploy via Docker Compose on EC2
         run: |
           ssh -i mykey.pem ec2-user@$SERVER_IP "
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest &&
-            docker run -d -p 80:80 --name $DOCKER_REPO ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest
+            cd /home/ec2-user/app &&
+            docker-compose pull &&
+            docker-compose up -d
           "
