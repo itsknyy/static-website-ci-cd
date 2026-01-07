@@ -25,7 +25,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 2. Build Docker Image
+      # 3. Build Docker Image
       - name: Build Docker Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$DOCKER_REPO:latest .
@@ -59,4 +59,5 @@ jobs:
             cd /home/ec2-user/app &&
             docker compose pull &&
             docker compose up -d
+
           "
